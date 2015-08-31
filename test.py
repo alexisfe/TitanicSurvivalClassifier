@@ -21,13 +21,22 @@ def get_family(name):
     else:
         return ""
 
-titles = train["Name"].apply(get_title)
+# titles = train["Name"].apply(get_title)
+#
+# print set(titles)
+#
+# family_names = train["Name"].apply(get_family)
+#
+# print set(family_names)
 
-print set(titles)
+t = train["Ticket"].value_counts()
+print t
+ticket = '1601'
+#
+# t = train.loc[train["Ticket"] == ticket, "Fare"].first(0)
+#
+# print train.loc[train["Ticket"] == ticket, "Fare"]/train.loc[train["Ticket"] == ticket, "Ticket"].count()
 
-family_names = train["Name"].apply(get_family)
-
-print set(family_names)
 
 
 

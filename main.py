@@ -56,81 +56,132 @@ def get_title(name):
         return title_search.group(1)
     return ""
 
+def get_num_tickets(ds):
+    return
+    #return ds.loc[ds["Ticket"] == ticket, "Ticket"].count()
+
+def get_fare_per_person(ticket):
+    return
+    #ds["Ticket"]
+
+def encode(ds):
+    le = LabelEncoder()
+    le.fit(ds)
+    return le.transform(ds)
+
 def transform(ds, age_median):
     ds['Age'] = ds['Age'].fillna(age_median)
 
-    ds.loc[ds['Sex'] == 'male', 'Sex'] = 1
-    ds.loc[ds['Sex'] == 'female', 'Sex'] = 2
+    ds["Sex"] = encode(ds["Sex"])
+
+    ds['Fare'] = ds['Fare'].fillna(ds['Fare'].median())
+    ds['Fare'] = ds['Fare'].apply(get_fare)
 
     ds['Embarked'] = ds['Embarked'].fillna('S')
-    ds['Fare'] = ds['Fare'].fillna(ds['Fare'].median())
-
-    ds.loc[ds["Embarked"] == "S", "Embarked"] = 0
-    ds.loc[ds["Embarked"] == "C", "Embarked"] = 1
-    ds.loc[ds["Embarked"] == "Q", "Embarked"] = 2
+    ds["Embarked"] = encode(ds["Embarked"])
 
     ds["FamilySize"] = ds["SibSp"] + ds["Parch"]
+
+    #Calculate name features
     ds["NameLength"] = ds["Name"].apply(lambda x: len(x))
 
     titles = ds["Name"].apply(get_title)
+    ds["Title"] = encode(titles)
 
-    titles_le = LabelEncoder()
-    titles_le.fit(titles)
-    ds["Title"] = titles_le.transform(titles)
+    family_names = ds["Name"].apply(get_family_name)
+    ds["FamilyName"] = encode(family_names)
 
+    #Calculate cabin features
     cabin_types = ds["Cabin"].apply(get_cabin_type)
-    cabin_types_le = LabelEncoder()
-    cabin_types_le.fit(cabin_types)
-    ds["CabinType"] = cabin_types_le.transform(cabin_types)
+    ds["CabinType"] = encode(cabin_types)
 
     ds["NumCabins"] = ds["Cabin"].apply(get_num_cabins)
 
-    family_names = ds["Name"].apply(get_family_name)
-    family_names_le = LabelEncoder()
-    family_names_le.fit(family_names)
-    ds["FamilyName"] = family_names_le.transform(family_names)
+    #Calculate ticket features
+    #ds["NumTickets"] = get_num_tickets(ds)
+    #ds["NumTickets"] = ds["Ticket"].apply()
 
     return ds
 
+print "Reading training and testing sets..."
 train = pd.read_csv('data/train.csv')
 test = pd.read_csv('data/test.csv')
 
 age_median = train['Age'].median()
 
+print "Engineering features..."
 transform(train, age_median)
 transform(test, age_median)
 
 predictors = ["Pclass", "Sex", "Age", "SibSp", "Parch", "Fare", "Embarked", "FamilySize", "NameLength", "Title", "CabinType", "NumCabins", "FamilyName"]
 
-# #Feature selection
-# selector = SelectKBest(f_classif, k=5)
-# selector.fit(train[predictors], train["Survived"])
-#
-# # Get the raw p-values for each feature, and transform from p-values into scores
-# scores = -np.log10(selector.pvalues_)
-#
-# # Plot the scores.  See how "Pclass", "Sex", "Title", and "Fare" are the best?
-# plt.bar(range(len(predictors)), scores)
-# plt.xticks(range(len(predictors)), predictors, rotation='vertical')
-# plt.show()
+#Feature selection
+selector = SelectKBest(f_classif, k=5)
+selector.fit(train[predictors], train["Survived"])
 
-predictors = ["Pclass", "Sex", "CabinType", "NameLength", "Title"]
+# Get the raw p-values for each feature, and transform from p-values into scores
+scores = -np.log10(selector.pvalues_)
 
-rfc = RandomForestClassifier(random_state=1, n_estimators=150, min_samples_split=8, min_samples_leaf=4)
-gbc = GradientBoostingClassifier(random_state=1, n_estimators=20, max_depth=5)
-lr = LogisticRegression(random_state=1)
+# Plot the scores.  See how "Pclass", "Sex", "Title", and "Fare" are the best?
+plt.bar(range(len(predictors)), scores)
+plt.xticks(range(len(predictors)), predictors, rotation='vertical')
+plt.show()
 
-svc_params = {'C': np.arange(0.01, 10, 0.05)
-    , 'kernel': ['rbf', 'linear', 'poly', 'sigmoid']
-    }
-svc = SVC()
+#predictors = ["Pclass", "Sex", "CabinType", "NameLength", "Title"]
 
-grid = GridSearchCV(estimator=svc, param_grid=svc_params)
+print "Starting up algorithms..."
+
+param = {'n_estimators': list(np.arange(10, 150, 10)), 'min_samples_split': list(np.arange(1, 10, 2)), 'min_samples_leaf': list(np.arange(1, 10, 2))}
+rfc = RandomForestClassifier()
+print "GridSearchCV on RFC..."
+grid = GridSearchCV(estimator=rfc, param_grid=param)
 grid.fit(train[predictors], train["Survived"])
-print(grid)
 # summarize the results of the grid search
 print(grid.best_score_)
-print(grid.best_estimator_.alpha)
+print "Best n_estimators found by GridSearch: ", grid.best_estimator_.n_estimators
+print "Best min_samples_split found by GridSearch: ", grid.best_estimator_.min_samples_split
+print "Best min_samples_leaf found by GridSearch: ", grid.best_estimator_.min_samples_leaf
+#
+gbc = GradientBoostingClassifier(random_state=1, n_estimators=20, max_depth=5)
+#
+# param = {'C': list(np.arange(0.01, 1, 0.01))}
+# lr = LogisticRegression(random_state=1)
+#
+# print "GridSearchCV on LR..."
+# grid = GridSearchCV(estimator=lr, param_grid=param)
+# grid.fit(train[predictors], train["Survived"])
+# # summarize the results of the grid search
+# #print(grid.best_score_)
+# print "Best C estimator found by GridSearch: ", grid.best_estimator_.C
+
+# svc_params = {'C': np.arange(0.01, 1, 0.1)
+#     , 'kernel': ['rbf', 'linear', 'poly', 'sigmoid']
+#     }
+# svc = SVC()
+#
+# print "GridSearchCV on SVC..."
+# grid = GridSearchCV(estimator=svc, param_grid=svc_params)
+# grid.fit(train[predictors], train["Survived"])
+# print(grid)
+# # summarize the results of the grid search
+# print(grid.best_score_)
+# print(grid.best_estimator_.alpha)
+#
+# alg = rfc
+#
+# # Compute the accuracy score for all the cross validation folds.  (much simpler than what we did before!)
+# scores = cross_validation.cross_val_score(alg, train[predictors], train["Survived"], cv=3)
+#
+# # Take the mean of the scores (because we have one for each fold)
+# print(scores.mean())
+#
+# alg = gbc
+#
+# # Compute the accuracy score for all the cross validation folds.  (much simpler than what we did before!)
+# scores = cross_validation.cross_val_score(alg, train[predictors], train["Survived"], cv=3)
+#
+# # Take the mean of the scores (because we have one for each fold)
+# print(scores.mean())
 
 alg = rfc
 
@@ -140,37 +191,12 @@ scores = cross_validation.cross_val_score(alg, train[predictors], train["Survive
 # Take the mean of the scores (because we have one for each fold)
 print(scores.mean())
 
-alg = gbc
+alg.fit(train[predictors], train["Survived"])
 
-# Compute the accuracy score for all the cross validation folds.  (much simpler than what we did before!)
-scores = cross_validation.cross_val_score(alg, train[predictors], train["Survived"], cv=3)
+predictions = alg.predict(test[predictors])
 
-# Take the mean of the scores (because we have one for each fold)
-print(scores.mean())
+submission = pd.DataFrame({"PassengerId": test["PassengerId"], "Survived": predictions})
 
-alg = lr
-
-# Compute the accuracy score for all the cross validation folds.  (much simpler than what we did before!)
-scores = cross_validation.cross_val_score(alg, train[predictors], train["Survived"], cv=3)
-
-# Take the mean of the scores (because we have one for each fold)
-print(scores.mean())
-
-alg = svc
-
-# Compute the accuracy score for all the cross validation folds.  (much simpler than what we did before!)
-scores = cross_validation.cross_val_score(alg, train[predictors], train["Survived"], cv=3)
-
-# Take the mean of the scores (because we have one for each fold)
-print(scores.mean())
-
-
-# alg.fit(train[predictors], train["Survived"])
-#
-# predictions = alg.predict(test[predictors])
-#
-# submission = pd.DataFrame({"PassengerId": test["PassengerId"], "Survived": predictions})
-#
-# submission.to_csv("submission/kaggle.csv", index=False)
+submission.to_csv("submission/kaggle.csv", index=False)
 
 
